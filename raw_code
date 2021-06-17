@@ -1,0 +1,103 @@
+import os
+import pandas as pd
+from bs4 import BeautifulSoup
+import requests
+def get_subtopic_page(topic_urls):
+    #Download the page
+    response = requests.get(topic_urls)
+    # Check successful response
+    if response.status_code not in range(200,300):
+        raise Exception("Failed to load page {}".format(topic_urls))
+    # Parse web-data using Beautiful_Soup
+    subtopic_soup = BeautifulSoup(response.text, 'html.parser')
+    return subtopic_soup
+
+def get_repo_info(h1_tag, star_tag):
+    # Returns all the required info about the repository
+    a_tags = h1_tag.find_all('a')
+    username = a_tags[0].text.strip()
+    repo_name = a_tags[1].text.strip()
+    repo_url = base_url + a_tags[1]['href']
+    stars = parse_star_count(star_tag.text.strip())
+    return username, repo_name, stars, repo_url
+
+
+def get_subtopic_repos(subtopic_soup):
+    # gets the h1-tags containing username, repo_name & repo_url
+    h1_finder_class = 'f3 color-text-secondary text-normal lh-condensed'
+    h1_repo_tags = subtopic_soup.find_all('h1', {'class': h1_finder_class})
+    # gets the star_tags containing the no of stars in each repos
+    star_finder_class = 'social-count float-none'
+    star_tags = subtopic_soup.find_all('a', class_ = star_finder_class)
+    
+    # Gets required data for each repository under the main topic and stores
+    # it as a dictionary
+    topic_repos_dict = {
+        'username' : [],
+        'repo_name' : [],
+        'stars' : [],
+        'repo_url' : [],
+    }
+    
+    for i in range(len(h1_repo_tags)):
+        repo_info = get_repo_info(h1_repo_tags[i], star_tags[i])
+        topic_repos_dict['username'].append(repo_info[0])
+        topic_repos_dict['repo_name'].append(repo_info[1])
+        topic_repos_dict['stars'].append(repo_info[2])
+        topic_repos_dict['repo_url'].append(repo_info[3])
+    
+    return pd.DataFrame(topic_repos_dict)   
+
+def scrape_subtopic(topic_url, path):
+    if os.path.exists(path):
+        print(f"The file {path} already exists. Skipping...")
+        return
+    subtopic_df = get_subtopic_repos(get_subtopic_page(topic_url))
+    subtopic_df.to_csv(path, index=None)
+ 
+ def get_topic_titles(soup):
+    selection_class = 'f3 lh-condensed mb-0 mt-1 Link--primary'
+    topic_title_tags = soup.find_all('p', {'class' : selection_class})
+    topic_titles = []
+    for tags in topic_title_tags:
+        topic_titles.append(tags.text)
+    return topic_titles
+def get_topic_descs(soup):
+    desc_selector = "f5 color-text-secondary mb-0 mt-1"
+    topic_desc_tags = soup.find_all('p', {'class' : desc_selector})
+    topic_descs = []
+    for tags in topic_desc_tags:
+        topic_descs.append(tags.text.strip())
+    return topic_descs
+def get_topic_urls(soup):
+    topic_link_tags = soup.find_all('a', class_ = 'd-flex no-underline')
+    topic_urls = []
+    base_url = 'https://github.com'
+    for tags in topic_link_tags:
+        topic_urls.append(base_url + tags['href'])
+    return topic_urls  
+        
+    
+def  scrape_topics():
+    response = requests.get(topics_url)
+    if response.status_code not in range(200,300):
+        raise Exception("Failed to load page {}".format(topic_url))
+    page_contents = response.text
+    soup = BeautifulSoup(page_contents, 'html.parser')
+    topics_dict = {
+        'title': get_topic_titles(soup),
+        'descriptions' : get_topic_descs(soup),
+        'topic_url' : get_topic_urls(soup),
+    }
+    return pd.DataFrame(topics_dict)
+    
+topics_url = 'https://github.com/topics'
+def scrape_topics_repos():
+    # Creating a separate folder = 'scraped_data(github)'
+    os.makedirs('scraped_data(github)', exist_ok = True)
+    print(f"Scraping list of topics from {topics_url}")
+    topics_df = scrape_topics()
+    for index,row in topics_df.iterrows():
+        print(f"Scraping top repositories for {row['title']}")
+        scrape_subtopic(row['topic_url'], f"scraped_data(github)/{row['title']}.csv")
+scrape_topics_repos()
