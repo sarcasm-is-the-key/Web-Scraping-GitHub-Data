@@ -1,6 +1,6 @@
 # Web-Scraping-GitHub-Data
 
-PROJECT OUTLINE:
+PROJECT PROBLEM STATEMENT:
 
 For top featured topics, in the topics column of GitHub page, gather the title, topic Description & topic url .
 
